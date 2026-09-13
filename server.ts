@@ -1097,9 +1097,16 @@ app.post('/api/webhook/simulate', async (req, res) => {
 });
 
 // ─── Server Startup & Vite Integration ──────────────────────────────────────
+export default app;
+
 
 async function startServer() {
   await seedInitialOrders();
+
+  // Skip static serving and binding port if running as Vercel serverless function
+  if (process.env.VERCEL) {
+    return;
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -1122,5 +1129,5 @@ async function startServer() {
 
 startServer().catch((err) => {
   console.error('Failed to start server:', err);
-  process.exit(1);
+  if (!process.env.VERCEL) process.exit(1);
 });
