@@ -1,0 +1,6 @@
+{
+  "name": "UPI Payment Gateway & Admin Panel",
+  "description": "Zero-commission UPI payment gateway supporting direct VPA, dynamic QR codes, PhonePe & Paytm adapters, with real-time checkout and admin management panel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
