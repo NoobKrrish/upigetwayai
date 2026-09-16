@@ -1,7 +1,6 @@
 import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
-import { createServer as createViteServer } from 'vite';
 import { generateUPIQR, buildIntentLinks, rupeesToPaise } from './src/lib/upipay/index.js';
 import type { MerchantConfig, GatewayOrder, PaymentTimelineEvent, GatewayStats } from './src/types/gateway.js';
 
@@ -15,7 +14,27 @@ app.use(express.urlencoded({ extended: true }));
 // Admin Credentials & Users
 const users = new Map<string, any>();
 users.set('admin', { username: 'admin', password: 'admin123' });
-const activeTokens = new Map<string, string>();
+const SECRET = process.env.SESSION_SECRET || 'fallback-secret-for-demo';
+
+function generateToken(username: string) {
+  const payload = Buffer.from(JSON.stringify({ username, exp: Date.now() + 86400000 })).toString('base64');
+  const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  return `${payload}.${signature}`;
+}
+
+function verifyToken(token: string) {
+  try {
+    const [payload, signature] = token.split('.');
+    if (!payload || !signature) return null;
+    const expected = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+    if (expected !== signature) return null;
+    const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+    if (data.exp < Date.now()) return null;
+    return data.username;
+  } catch (e) {
+    return null;
+  }
+}
 
 // Authentication Middleware
 const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -24,9 +43,11 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
     return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing token' });
   }
   const token = authHeader.split(' ')[1];
-  if (!activeTokens.has(token)) {
+  const username = verifyToken(token);
+  if (!username) {
     return res.status(401).json({ success: false, error: 'Unauthorized: Invalid token' });
   }
+  (req as any).user = { username };
   next();
 };
 
@@ -35,8 +56,7 @@ app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const user = users.get(username);
   if (user && user.password === password) {
-    const token = crypto.randomBytes(16).toString('hex');
-    activeTokens.set(token, username);
+    const token = generateToken(username);
     return res.json({ success: true, token });
   }
   return res.status(401).json({ success: false, error: 'Invalid username or password' });
@@ -47,7 +67,7 @@ app.post('/api/users/change-credentials', (req, res) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader) return res.status(401).json({ success: false, error: 'Unauthorized' });
   const token = authHeader.split(' ')[1];
-  const currentUsername = activeTokens.get(token);
+  const currentUsername = verifyToken(token);
   if (!currentUsername) return res.status(401).json({ success: false, error: 'Unauthorized' });
   
   const user = users.get(currentUsername);
@@ -1109,6 +1129,7 @@ async function startServer() {
   }
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

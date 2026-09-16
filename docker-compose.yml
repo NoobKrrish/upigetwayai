@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  upi-gateway:
+    build: .
+    container_name: upi-gateway-app
+    restart: always
+    ports:
+      - "80:3000" # Maps VPS port 80 to Docker port 3000
+    environment:
+      - NODE_ENV=production
+      # Add other environment variables here if needed
+      # - MY_SECRET_KEY=your_secret_value
